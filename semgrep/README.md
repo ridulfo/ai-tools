@@ -7,8 +7,15 @@
 
 Because of the sentive nature of personal files, the number of lines of code will be kept low in order for the project to easily be audited and understood.
 
-## Installation and updating
-`pip install -U git+https://github.com/ridulfo/sem-grep`
+## Installation
+To install or update semgrep use the following command. It pip-installs from this repository's semgrep directory.
+```bash
+pip install -U git+https://github.com/ridulfo/ai-tools@main#subdirectory=semgrep
+```
+To uninstall just run
+```bash
+pip uninstall semgrep
+```
 
 
 ## Usage
