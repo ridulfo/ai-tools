@@ -1,0 +1,3 @@
+#!/bin/bash
+
+wget -qO- $1 | pandoc -f html -t gfm-raw_html | grep -v '\bdata:image/svg+xml\b'
