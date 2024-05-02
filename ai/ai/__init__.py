@@ -20,12 +20,12 @@ def main():
         set_model(sys.argv[2])
 
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("prompt", type=str)
-    arg_parser.add_argument("-n", type=int, required=False, default=1000)
-    arg_parser.add_argument("--temperature", "-t", type=float, required=False, default=0.9)
-    arg_parser.add_argument("--context", "-c", type=int, required=False, default=1024)
-    arg_parser.add_argument("--model", "-m", type=str, required=False)
-    arg_parser.add_argument("--verbose", "-v", action="store_true", required=False, default=False)
+    arg_parser.add_argument("prompt", type=str, help="The prompt to send to the model")
+    arg_parser.add_argument("-n", type=int, required=False, default=1000, help="The maximum number of tokens to generate")
+    arg_parser.add_argument("--temperature", "-t", type=float, required=False, default=0.9, help="The temperature to use when generating text")
+    arg_parser.add_argument("--context", "-c", type=int, required=False, default=1024, help="The context window size to use when generating text")
+    arg_parser.add_argument("--model", "-m", type=str, required=False, help="The path to the model to use. Can be set permanently with 'ai set-model <model-path>'")
+    arg_parser.add_argument("--verbose", "-v", action="store_true", required=False, default=False, help="Print additional information about the request")
 
     args = arg_parser.parse_args()
 

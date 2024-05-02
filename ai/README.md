@@ -29,15 +29,18 @@ ai -h
 usage: ai [-h] [-n N] [--temperature TEMPERATURE] [--context CONTEXT] [--model MODEL] [--verbose] prompt
 
 positional arguments:
-  prompt
+  prompt                The prompt to send to the model
 
 options:
   -h, --help            show this help message and exit
-  -n N
+  -n N                  The maximum number of tokens to generate
   --temperature TEMPERATURE, -t TEMPERATURE
+                        The temperature to use when generating text
   --context CONTEXT, -c CONTEXT
+                        The context window size to use when generating text
   --model MODEL, -m MODEL
-  --verbose, -v
+                        The path to the model to use. Can be set permanently with 'ai set-model <model-path>'
+  --verbose, -v         Print additional information about the request
 ```
 
 ## Bonus
