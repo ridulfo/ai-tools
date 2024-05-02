@@ -1,5 +1,5 @@
 # AI-Tools
-AI-Tools is a collection of AI-driven tools that follow the Unix philosophy. This sames them easily composable and incredibly **powerful**.
+ai-tools is a collection of AI-driven tools that follow the Unix philosophy. This sames them easily composable and incredibly **powerful**.
 
 ## semgrep
 **Semantic search for local files - no database required**
