@@ -5,7 +5,9 @@
 - Low code complexity
 - Sub 300 lines of code
 
-Because of the sentive nature of personal files, the number of lines of code will be kept low in order for the project to easily be audited and understood.
+Because of the sensitive nature of personal files, the number of lines of code will be kept low in order for the project to easily be audited and understood.
+
+The text splitter is still in development. At the moment only markdown files are supported.
 
 ## Installation
 To install or update semgrep use the following command. It pip-installs from this repository's semgrep directory.
