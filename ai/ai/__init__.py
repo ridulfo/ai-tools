@@ -21,19 +21,6 @@ def main():
 
     args = arg_parser.parse_args()
 
-    additional_context = ""
-    if not sys.stdin.isatty():
-        additional_context = "Additional context:\n" + sys.stdin.read()
-
-    prompt = f"""<|im_start|>system
-You are a helpful assistant<|im_end|>
-<|im_start|>user
-{args.prompt}
-{additional_context}
-<|im_end|>
-<|im_start|>assistant
-"""
-
     llm = Llama(
         model_path=args.model,
         verbose=False,
@@ -42,20 +29,35 @@ You are a helpful assistant<|im_end|>
         n_ctx=args.context,
     )
 
-    output = llm(
-        prompt,
+    stdin = ""
+    if not sys.stdin.isatty(): # If the program is running in a pipe
+        stdin = sys.stdin.read().strip()
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant"},
+          {
+              "role": "user",
+              "content": args.prompt + ("\nAdditional context: '" + stdin + "'" if len(stdin)>0 else "")
+          }
+    ]
+
+    stream = llm.create_chat_completion(
+        messages=messages,
         max_tokens=args.n,
         stream=True,
-        stop="<|im_end|>",
         temperature=args.temperature,
     )
 
     if args.verbose:
-        print(prompt)
+        print("Full user message to to model:")
+        print(messages[1]["content"])
+        print()
 
-    for o in output:
-        token = o["choices"][0]["text"]  # type: ignore
-        print(token, end="", flush=True)
+
+    for response in stream:
+        response = response["choices"][0]["delta"] # type: ignore
+        if "content" in response:
+            print(response["content"], end="", flush=True) # type: ignore
     print()
 
 
