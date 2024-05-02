@@ -9,8 +9,16 @@ A local LLM-based command line program. It takes a prompt as an argument and can
 > This website appears to be a personal portfolio and blog website of an individual named Nicolo. The website has several sections, including "about", "thoughts", "blog", and "projects". The homepage lists these categories in a navigation menu.
 
 ## Getting started
-
-Obtain a model following [these instructions](https://github.com/ggerganov/llama.cpp?tab=readme-ov-file#obtaining-and-using-the-facebook-llama-2-model).
+1. Obtain a model following [these instructions](https://github.com/ggerganov/llama.cpp?tab=readme-ov-file#obtaining-and-using-the-facebook-llama-2-model).
+2. Install using the following command. It pip-installs from this repository's ai directory.
+```bash
+pip install -U git+https://github.com/ridulfo/ai-tools@main#subdirectory=ai
+```
+> [!NOTE]
+> To uninstall just run
+> ```bash
+> pip uninstall ai
+> ```
 
 ## Usage
 
