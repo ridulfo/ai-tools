@@ -20,6 +20,8 @@ pip install -U git+https://github.com/ridulfo/ai-tools@main#subdirectory=ai
 > pip uninstall ai
 > ```
 
+3. (optional) To not have to specify the model path every time, you can set it using `ai set-model path/to/model`. 
+
 ## Usage
 
 ```
