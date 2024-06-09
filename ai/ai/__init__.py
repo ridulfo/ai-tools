@@ -26,6 +26,7 @@ def main():
     arg_parser.add_argument("--context", "-c", type=int, required=False, default=1024, help="The context window size to use when generating text")
     arg_parser.add_argument("--model", "-m", type=str, required=False, help="The path to the model to use. Can be set permanently with 'ai set-model <model-path>'")
     arg_parser.add_argument("--verbose", "-v", action="store_true", required=False, default=False, help="Print additional information about the request")
+    arg_parser.add_argument("--interactive", "-i", action="store_true", required=False, default=False, help="Run in interactive mode")
 
     args = arg_parser.parse_args()
 
@@ -45,9 +46,11 @@ def main():
         n_ctx=args.context,
     )
 
+    # Get piped input
     stdin = ""
     if not sys.stdin.isatty(): # If the program is running in a pipe
         stdin = sys.stdin.read().strip()
+        sys.stdin = open('/dev/tty')
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant"},
@@ -57,24 +60,38 @@ def main():
           }
     ]
 
-    stream = llm.create_chat_completion(
-        messages=messages,
-        max_tokens=args.n,
-        stream=True,
-        temperature=args.temperature,
-    )
-
     if args.verbose:
-        print("Full user message to to model:")
-        print(messages[1]["content"])
+         print("Full user message to to model:")
+         print(messages[1]["content"])
+         print()
+
+    while True:
+
+        stream = llm.create_chat_completion(
+            messages=messages,
+            max_tokens=args.n,
+            stream=True,
+            temperature=args.temperature,
+        )
+
+        full_response = ""
+        if args.interactive:
+            print("AI: ", end="", flush=True)
+        for response in stream:
+            response = response["choices"][0]["delta"] # type: ignore
+            if "content" in response:
+                content = response["content"]       # type: ignore
+                full_response += content            # type: ignore
+                print(content, end="", flush=True)  # type: ignore
         print()
 
+        messages.append({"role": "system", "content": full_response})
 
-    for response in stream:
-        response = response["choices"][0]["delta"] # type: ignore
-        if "content" in response:
-            print(response["content"], end="", flush=True) # type: ignore
-    print()
+        if not args.interactive: # simulate do-while loop
+            break
+
+        user_input = input("You: ")
+        messages.append({"role": "user", "content": user_input})
 
 
 if __name__ == "__main__":

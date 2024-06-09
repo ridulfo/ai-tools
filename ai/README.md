@@ -26,7 +26,7 @@ pip install -U git+https://github.com/ridulfo/ai-tools@main#subdirectory=ai
 
 ```
 ai -h
-usage: ai [-h] [-n N] [--temperature TEMPERATURE] [--context CONTEXT] [--model MODEL] [--verbose] prompt
+usage: ai [-h] [-n N]  [-h] [-n N] [--temperature TEMPERATURE] [--context CONTEXT] [--model MODEL] [--verbose] [--interactive] prompt
 
 positional arguments:
   prompt                The prompt to send to the model
@@ -41,7 +41,7 @@ options:
   --model MODEL, -m MODEL
                         The path to the model to use. Can be set permanently with 'ai set-model <model-path>'
   --verbose, -v         Print additional information about the request
-```
+  --interactive, -i     Run in interactive mode```
 
 ## Bonus
 
