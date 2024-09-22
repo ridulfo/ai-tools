@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai"
+version = "0.1"
+description = "A local LLM in the command line"
+authors = [
+    { name = "Ridulfo" }
+]
+
+dependencies = [
+    "diskcache==5.6.3",
+    "Jinja2==3.1.3",
+    "llama_cpp_python==0.2.77",
+    "MarkupSafe==2.1.5",
+    "numpy==1.26.4",
+    "typing_extensions==4.11.0"
+]
+
+[project.scripts]
+ai = "ai:main"
+
