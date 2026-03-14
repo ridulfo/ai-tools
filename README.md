@@ -1,5 +1,5 @@
 # AI-Tools
-ai-tools is a collection of AI-driven tools that follow the Unix philosophy. This sames them easily composable and incredibly **powerful**.
+`ai-tools` is a collection of AI-driven tools that follow the Unix philosophy. This sames them easily composable and incredibly **powerful**.
 
 ## semgrep
 **Semantic search for local files - no database required**
@@ -11,7 +11,12 @@ ai-tools is a collection of AI-driven tools that follow the Unix philosophy. Thi
 
 Because of the sensitive nature of personal files, the number of lines of code will be kept low in order for the project to easily be audited and understood.
 
+**Python:**
 Install using: `pip install -U git+https://github.com/ridulfo/ai-tools@main#subdirectory=semgrep`
+
+**NixOS**:
+Run without installing `nix run github:ridulfo/ai-tools#semgrep`
+
 
 [Read more here](semgrep/README.md)
 

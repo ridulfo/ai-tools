@@ -24,7 +24,7 @@ pip uninstall semgrep
 
 ```
 semgrep -h
-usage: Semantic grep [-h] [--update] [--path PATH] [-n N] query
+usage: Semantic grep [-h] [--path PATH] [-k K] [--index-path INDEX_PATH] [-v] [--no-update] query
 
 A semantic document search
 
@@ -33,14 +33,17 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --update, -u          Whether to update the index (might take some time).
-  --path PATH, -p PATH  The directory to search.
-  -n N                  The number of results to return
+  --path, -p PATH       The directory to search.
+  -k, --top-k K         Return only the top K matches
+  --index-path, -i INDEX_PATH
+                        Where to store the index
+  -v, --verbose         Show debug output
+  --no-update           Use existing index without re-indexing files. If no index is found, will exit with 1
 ```
 
 **Example**
 
-`semgrep -u -p document-directory -n 4 "search query"`
+`semgrep "search query" --path document-directory -k 4`
 
 ## How it works
 

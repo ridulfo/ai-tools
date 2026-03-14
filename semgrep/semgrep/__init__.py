@@ -1,115 +1,112 @@
 #! env/bin/python3
-
 import argparse
-from dataclasses import dataclass
-from hashlib import md5
+import hashlib
+import logging
 import os
 import pickle
-from typing import Dict, List, Optional
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 import numpy as np
 from scipy.spatial.distance import cosine
 from sentence_transformers import SentenceTransformer
-from torch.functional import Tensor
 from tqdm import tqdm
 
+logger = logging.getLogger(__name__)
+
 INDEX_FILE_NAME = ".semgrep-index"
+HEADING_RE = re.compile(r"^(#+)\s")
+
 
 @dataclass
-class Document:
-    path: str
-    embeddings: Optional[List[Tensor]]
-
-index_t = Dict[bytes, Document] # hash digest -> Document
+class FileState:
+    mtime: float
+    hash: str
 
 
-def find_all_files(path="."):
-    """
-    Recursively find all files in a directory.
-    """
-    files = []
-    for root, _, file_names in os.walk(path):
-        for file_name in file_names:
-            # TODO: create different splitters for different file types
-            if file_name.endswith(".md"):
-                files.append(os.path.join(root, file_name))
-    return files
+@dataclass
+class Index:
+    state: Dict[Path, FileState]
+    embeddings: Dict[Path, List[np.ndarray]]
 
 
-def embed_document(model, document_text):
-    model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-    """
-    Embeds a single document.
-    """
-    chapters = split_text_into_chapters(document_text)
-    chapter_embeddings = []
-    for chapter in chapters:
-        sentences = text_into_sentences(chapter)
-        sentences_embeddings = model.encode(sentences)
-        average_embedding = np.mean(sentences_embeddings, axis=0)
-        chapter_embeddings.append(average_embedding)
-    
-    return chapter_embeddings
+def hash_file(path: Path) -> str:
+    h = hashlib.md5()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
-def split_text_into_chapters(text):
-    """
-    Finds a heading and split the text into chapters.
-    """
-
-    chapters = []
-    chapter = []
-    for line in text.splitlines():
-        if line.startswith("#"):
-            chapters.append("\n".join(chapter))
-            chapter = []
-        if line != "":
-            chapter.append(line)
-    chapters.append("\n".join(chapter))
-
-    return chapters[1:]
+def has_changed(path: Path, stored_file_state: FileState) -> bool:
+    current_mtime = path.stat().st_mtime
+    if current_mtime == stored_file_state.mtime:
+        return False  # fast path, no need to hash
+    return hash_file(path) != stored_file_state.hash  # mtime changed, verify with hash
 
 
-def text_into_sentences(text):
-    """
-    Splits text into sentences.
+@dataclass
+class Section:
+    text: str
+    children: List["Section"] = field(default_factory=list)
 
-    Splits on punctuation and newlines.
-    """
-    sentences = []
+    @property
+    def level(self) -> int:
+        m = HEADING_RE.match(self.text)
+        return len(m.group(1)) if m else 0
 
-    for line in text.splitlines():
-        sentences.extend(line.split(". "))
-    return sentences
-
-
-def create_empty_index(search_path):
-    files = find_all_files(search_path)
-    index:index_t = {}
-
-    for file_path in tqdm(files, desc="Hashing files"):
-        with open(file_path, "r") as f:
-            document_text = f.read()
-
-        hash = md5(document_text.encode()).digest()
-
-        index[hash] = Document(file_path, None)
-
-    return index
+    def append(self, child: "Section"):
+        self.children.append(child)
 
 
-def transfer_embeddings(old_index: index_t, new_index: index_t):
-    for hash, document in new_index.items():
-        if hash in old_index:
-            document.embeddings = old_index[hash].embeddings
+def build_tree(text: str) -> Section:
+    CHAPTER_RE = re.compile(r"(?=^#+\s)", re.MULTILINE)
+    parts = CHAPTER_RE.split(text)
 
-def embed_missing_documents(index: index_t, model):
-    documents_to_embed = list(filter(lambda d: not d.embeddings,  index.values()))
-    if len(documents_to_embed)==0: return
-    for document in tqdm(documents_to_embed, desc="Embeddings documents"):
-        if not document.embeddings:
-            with open(document.path) as f:
-                document.embeddings = embed_document(model, f.read())
+    root = Section(text="")
+    stack = [root]
+
+    for part in parts:
+        node = Section(text=part)
+
+        while len(stack) > 1 and stack[-1].level >= node.level:
+            stack.pop()
+        stack[-1].append(node)
+        stack.append(node)
+
+    return root
+
+
+def walk(section: Section) -> List[str]:
+    """Collect chunks from tree - each section alone and with children."""
+    chunks = []
+
+    def full_text(section: Section) -> str:
+        parts = [section.text] + [full_text(c) for c in section.children]
+        return "\n".join(filter(None, parts))
+
+    def _walk(section: Section):
+        chunks.append(section.text)
+        if section.children:
+            chunks.append(full_text(section))
+        for child in section.children:
+            _walk(child)
+
+    chunks.append(full_text(section))
+    for child in section.children:
+        _walk(child)
+
+    return chunks
+
+
+def embed_file(path: Path, model: SentenceTransformer) -> List[np.ndarray]:
+    text = path.read_text()
+    root = build_tree(text)
+    chunks = walk(root)
+    return list(model.encode(chunks, show_progress_bar=False))
 
 
 def save_index(index_path, index):
@@ -122,79 +119,140 @@ def load_index(index_path):
         return pickle.load(f)
 
 
-def search(index:index_t, query, n=1):
-    """
-    Searches the documents for the query.
-
-    query: str
-        The query to search for.
-    documents_embeddings: dict[str, list[float]]
-    """
-
-    model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-
+def search(
+    model: SentenceTransformer,
+    index: Index,
+    query: str,
+    n: int = 1,
+):
     query_embedding = model.encode([query])[0]
 
-    # Compare the query embedding with the document embeddings
-    distances = {}
-    for _, document in tqdm(index.items(), desc="Searching"):
-        best_score = 0
-        best_chapter = 0
-
-        if not document.embeddings:
+    distances: Dict[Path, Tuple[float, int]] = {}
+    for path, embeddings in tqdm(index.embeddings.items(), "Searching..."):
+        if not embeddings:
             continue
-
-        for chapter_idx, chapter_embedding in enumerate(document.embeddings):
-            score = 1 - cosine(query_embedding, chapter_embedding)
+        best_score = 0.0
+        best_chapter = 0
+        for chapter_idx, chapter_embedding in enumerate(embeddings):
+            score = float(1 - cosine(query_embedding, chapter_embedding))
             if score > best_score:
                 best_score = score
                 best_chapter = chapter_idx
+        distances[path] = (best_score, best_chapter)
 
-        distances[document.path] = (best_score, best_chapter)
-
-    # Sort the distances
     sorted_distances = sorted(distances.items(), key=lambda x: x[1][0], reverse=True)
 
-    # Print the top n results
     for filename, distance in sorted_distances[:n]:
-        print(f"{filename} with score {distance[0]} in chapter {distance[1]}")
-        with open(filename, "r") as f:
-            document = f.read()
-        chapters = split_text_into_chapters(document)
-        print(chapters[distance[1]], end="\n\n")
+        text = filename.read_text()
+        root = build_tree(text)
+        chunks = walk(root)
+        chapter_idx = distance[1]
+        if chapter_idx < len(chunks):
+            print(f"{filename} with score {distance[0]}")
+            print(chunks[chapter_idx], end="\n\n")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="Semantic grep", description="A semantic document search"
+    )
+
+    parser.add_argument("query", type=str, help="The search query.")
+
+    parser.add_argument(
+        "--path", "-p", help="The directory to search.", default=".", type=str
+    )
+    parser.add_argument(
+        "-k",
+        "--top-k",
+        type=int,
+        default=None,
+        metavar="K",
+        help="Return only the top K matches",
+    )
+
+    parser.add_argument(
+        "--index-path",
+        "-i",
+        help="Where to store the index",
+        default=None,
+        type=str,
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Show debug output"
+    )
+
+    parser.add_argument(
+        "--no-update",
+        action="store_true",
+        help="Use existing index without re-indexing files. If no index is found, will exit with 1",
+    )
+    return parser
+
+
+def setup_logging(verbose: bool = False):
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        stream=sys.stderr,
+        level=level,
+        format="%(message)s",  # plain, no "INFO:root:" prefix
+    )
+
 
 def main():
-    parser = argparse.ArgumentParser(prog="Semantic grep", description="A semantic document search")
-    parser.add_argument("query", type=str, help="The search query.")
-    parser.add_argument("--update", "-u", action='store_true', help="Whether to update the index (might take some time).", default=False)
-    parser.add_argument("--path", "-p", help="The directory to search.", default=".", type=str)
-    parser.add_argument("-n", help="The number of results to return", default=1, type=int)
-    
-    args = parser.parse_args()
-    query = args.query
-    search_path = args.path
-    should_update = args.update
-    n = args.n
+    args = build_parser().parse_args()
+    setup_logging(args.verbose)
 
-    index_path = os.path.join(search_path, INDEX_FILE_NAME)
-    has_index = os.path.exists(index_path)
-    
-    if has_index:
+    if not args.index_path:
+        args.index_path = args.path
+    index_path = os.path.join(args.index_path, INDEX_FILE_NAME)
+    index_exists = os.path.exists(index_path)
+
+    if index_exists:
+        logger.debug(f"Index exists at {index_path}. Updating it.")
         index = load_index(index_path)
+    elif args.no_update:
+        logger.error(f"No index found at {index_path} and --no-update passed")
+        exit(1)
     else:
-        index = create_empty_index(search_path)
-        should_update = True
+        logger.debug(f"No index found at {index_path}. Generating one...")
+        index = Index(state={}, embeddings={})
 
-    model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+    model = SentenceTransformer(
+        "sentence-transformers/all-MiniLM-L6-v2", local_files_only=True
+    )
+    all_files = list(Path(args.path).rglob("*.md"))
+    all_file_set = set(all_files)
 
-    if should_update:
-        old_index = index
-        index = create_empty_index(search_path) # hash -> (file name, None)
-        transfer_embeddings(old_index, index)
-        embed_missing_documents(index, model)
+    to_reindex = []
+    for path in all_files:
+        if path not in index.state:
+            index.state[path] = FileState(
+                mtime=path.stat().st_mtime, hash=hash_file(path)
+            )
+            to_reindex.append(path)
+        elif has_changed(path, index.state[path]):
+            to_reindex.append(path)
+
+    logger.debug(f"{len(to_reindex)} files to reindex")
+
+    for path in list(index.state.keys()):
+        if path not in all_file_set:
+            del index.state[path]
+            index.embeddings.pop(path, None)
+
+    for i, path in enumerate(tqdm(to_reindex, "Indexing...")):
+        logger.debug(f"Re-embedding {path}")
+        index.embeddings[path] = embed_file(path, model)
+        index.state[path] = FileState(mtime=path.stat().st_mtime, hash=hash_file(path))
+        if (i + 1) % 10 == 0:
+            save_index(index_path, index)
+
+    if to_reindex:
         save_index(index_path, index)
-        
-    search(index, query, n)
+
+    search(model, index, args.query, args.top_k or 1)
+
 
 if __name__ == "__main__":
     main()

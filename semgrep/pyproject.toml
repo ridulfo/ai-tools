@@ -1,0 +1,28 @@
+[project]
+name = "semgrep"
+version = "0.1"
+description = "Semantic search for local files"
+authors = [
+    {name = "ridulfo"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "scipy",
+    "sentence-transformers",
+    "torch",
+    "tqdm",
+]
+
+[project.scripts]
+semgrep = "semgrep:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["semgrep*"]
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
