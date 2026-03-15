@@ -1,5 +1,6 @@
 #! env/bin/python3
 import argparse
+import gzip
 import hashlib
 import logging
 import os
@@ -17,7 +18,7 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-INDEX_FILE_NAME = ".semgrep-index"
+INDEX_FILE_NAME = ".semgrep-index.gz"
 HEADING_RE = re.compile(r"^(#+)\s")
 
 
@@ -110,12 +111,14 @@ def embed_file(path: Path, model: SentenceTransformer) -> List[np.ndarray]:
 
 
 def save_index(index_path, index):
-    with open(index_path, "wb") as f:
+    with gzip.open(index_path, "wb") as f:
+        assert isinstance(f, gzip.GzipFile)
         pickle.dump(index, f)
 
 
 def load_index(index_path):
-    with open(index_path, "rb") as f:
+    with gzip.open(index_path, "rb") as f:
+        assert isinstance(f, gzip.GzipFile)
         return pickle.load(f)
 
 
