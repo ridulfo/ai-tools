@@ -206,9 +206,8 @@ def main():
     if not args.index_path:
         args.index_path = args.path
     index_path = os.path.join(args.index_path, INDEX_FILE_NAME)
-    index_exists = os.path.exists(index_path)
 
-    if index_exists:
+    if os.path.exists(index_path):
         logger.debug(f"Index exists at {index_path}. Updating it.")
         index = load_index(index_path)
     elif args.no_update:
@@ -218,41 +217,36 @@ def main():
         logger.debug(f"No index found at {index_path}. Generating one...")
         index = Index(state={}, embeddings={})
 
-    model = SentenceTransformer(
-        "sentence-transformers/all-MiniLM-L6-v2", local_files_only=True
-    )
-    all_files = list(Path(args.path).rglob("*.md"))
-    all_file_set = set(all_files)
+    all_files = set(Path(args.path).rglob("*.md"))
 
-    to_reindex = []
-    for path in all_files:
-        if path not in index.state:
-            index.state[path] = FileState(
-                mtime=path.stat().st_mtime, hash=hash_file(path)
-            )
-            to_reindex.append(path)
-        elif has_changed(path, index.state[path]):
-            to_reindex.append(path)
-
-    logger.debug(f"{len(to_reindex)} files to reindex")
-
+    # Remove deleted files
     for path in list(index.state.keys()):
-        if path not in all_file_set:
+        if path not in all_files:
             del index.state[path]
             index.embeddings.pop(path, None)
 
-    for i, path in enumerate(tqdm(to_reindex, "Indexing...")):
-        logger.debug(f"Re-embedding {path}")
-        index.embeddings[path] = embed_file(path, model)
-        index.state[path] = FileState(mtime=path.stat().st_mtime, hash=hash_file(path))
-        if (i + 1) % 10 == 0:
-            save_index(index_path, index)
+    # Determine what needs reindexing
+    to_reindex = [
+        path
+        for path in all_files
+        if path not in index.state
+        or path not in index.embeddings
+        or has_changed(path, index.state[path])
+    ]
+    logger.debug(f"{len(to_reindex)} files to reindex")
 
+    model = SentenceTransformer(
+        "sentence-transformers/all-MiniLM-L6-v2", local_files_only=True
+    )
     if to_reindex:
+        for i, path in enumerate(tqdm(to_reindex, "Indexing...")):
+            logger.debug(f"Re-embedding {path}")
+            index.embeddings[path] = embed_file(path, model)
+            index.state[path] = FileState(
+                mtime=path.stat().st_mtime, hash=hash_file(path)
+            )
+            if (i + 1) % 10 == 0:
+                save_index(index_path, index)
         save_index(index_path, index)
 
     search(model, index, args.query, args.top_k or 1)
-
-
-if __name__ == "__main__":
-    main()
